@@ -22,7 +22,7 @@
 
 // Define the name of the plugin
 #ifndef PLUGIN_NAME
-#define PLUGIN_NAME "rpio"
+#define PLUGIN_NAME "rpio_in"
 #endif
 
 // Load the namespaces
@@ -105,6 +105,7 @@ class RpioPlugin : public Source<json> {
     map<string, string> info;
     ostringstream ss;
     info["chip_path"] = _chip_path;
+    info["pulldown"] = _params.value("pulldown", true) ? "true" : "false";
 
     for (size_t i = 0; i < _offsets.size(); i++) {
       ss << _offsets[i];

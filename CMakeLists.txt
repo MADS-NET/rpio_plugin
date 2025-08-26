@@ -128,6 +128,7 @@ include_directories(${json_SOURCE_DIR}/include)
 
 # These plugins are always build and use for testing
 add_plugin(rpio_in LIBS ${LIBGPIOD2_LIBRARIES})
+add_plugin(rpio_out LIBS ${LIBGPIOD2_LIBRARIES})
 
 # INSTALL ######################################################################
 if(APPLE)
