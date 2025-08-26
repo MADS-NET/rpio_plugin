@@ -27,11 +27,21 @@ else()
   message(STATUS "PLUGIN_SUFFIX set to: ${PLUGIN_SUFFIX}")
 endif()
 
-if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-  option(USE_GPIOD_2 "Use libgpiod version 2" ON)
+# Find libgpiod (v2)
+find_package(PkgConfig REQUIRED)
+
+# Try to find libgpiod2 using pkg-config
+pkg_check_modules(LIBGPIOD2 QUIET libgpiodcxx libgpiod)
+
+if(LIBGPIOD2_FOUND)
+    message(STATUS "Found libgpiod2: ${LIBGPIOD2_VERSION}")
+    include_directories(${LIBGPIOD2_INCLUDE_DIRS})
+    link_directories(${LIBGPIOD2_LIBRARY_DIRS})
 else()
-  message(FATAL_ERROR "Non-Linux system detected, which is unsupported")
+    message(FATAL_ERROR "libgpiod2 not found. Install it with 'apt install libgpio2 libgpiod-dev'")
 endif()
+
+
 
 # PROJECT SETTINGS #############################################################
 set(CMAKE_CXX_STANDARD 17)
@@ -117,10 +127,7 @@ endif()
 include_directories(${json_SOURCE_DIR}/include)
 
 # These plugins are always build and use for testing
-add_plugin(rpio)
-if(${USE_GPIOD_2})
-  target_compile_definitions(rpio PRIVATE USE_GPIOD_2)
-endif()
+add_plugin(rpio_in LIBS ${LIBGPIOD2_LIBRARIES})
 
 # INSTALL ######################################################################
 if(APPLE)
