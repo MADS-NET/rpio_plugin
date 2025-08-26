@@ -32,6 +32,7 @@ The plugin supports the following settings in the INI file:
 chip_path = "/dev/gpiochip0"
 offsets = [5, 15, 10, 12]
 pulldown = true
+event_mode = "none"  ; options: none, rising, falling, both
 period = 500
 
 [rpio_out]

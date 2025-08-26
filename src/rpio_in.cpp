@@ -32,26 +32,25 @@ using json = nlohmann::json;
 // Plugin class. This shall be the only part that needs to be modified,
 // implementing the actual functionality
 class RpioPlugin : public Source<json> {
-  
+
   void setup_lines() {
     _chip = gpiod::chip(_chip_path);
     _lines = _chip.get_lines(_offsets);
     gpiod::line_request req;
     req.consumer = "rpio_in.plugin";
-    req.request_type = gpiod::line_request::DIRECTION_INPUT;
-    if (_params.value("pulldown", true)) {
-      req.flags = ::gpiod::line_request::FLAG_BIAS_PULL_DOWN;
+    if (event_mode(_params["event_mode"]) == -1) {
+      req.request_type = gpiod::line_request::DIRECTION_INPUT;
     } else {
-      req.flags = ::gpiod::line_request::FLAG_BIAS_PULL_UP;
+      req.request_type = event_mode(_params["event_mode"]);
     }
     _lines.request(req);
   }
-  
-  public:
-    ~RpioPlugin() {
-      _lines.release();
-      _chip.reset(); // Destructor, release resources if needed
-    }
+
+public:
+  ~RpioPlugin() {
+    _lines.release();
+    _chip.reset(); // Destructor, release resources if needed
+  }
 
   // Typically, no need to change this
   string kind() override { return PLUGIN_NAME; }
@@ -60,9 +59,35 @@ class RpioPlugin : public Source<json> {
   return_type get_output(json &out,
                          std::vector<unsigned char> *blob = nullptr) override {
     out.clear();
+    gpiod::line_bulk *lines_to_read = new gpiod::line_bulk();
+    switch (event_mode(_params["event_mode"])) {
+    case -1: {
+      lines_to_read = &_lines;
+    } break;
+
+    case gpiod::line_request::EVENT_RISING_EDGE:
+    case gpiod::line_request::EVENT_FALLING_EDGE:
+    case gpiod::line_request::EVENT_BOTH_EDGES: {
+      try {
+        *lines_to_read = _lines.event_wait(chrono::milliseconds(500));
+      } catch (const std::system_error &e) {
+        _error = e.what();
+        return return_type::critical;
+      }
+      if (lines_to_read->empty()) {
+        _error = "No events occurred";
+        return return_type::retry;
+      }
+    } break;
+    default: {
+      _error = "Event mode not supported";
+      return return_type::error;
+    } break;
+    }
+
     int value = 0;
     unsigned int offset = 0;
-    for (auto &line : _lines) {
+    for (auto &line : *lines_to_read) {
       try {
         value = line.get_value();
         offset = line.offset();
@@ -70,7 +95,7 @@ class RpioPlugin : public Source<json> {
       } catch (const std::exception &e) {
         _error = e.what();
         return return_type::error;
-      }
+      } 
     }
 
     // This sets the agent_id field in the output json object, only when it is
@@ -84,6 +109,7 @@ class RpioPlugin : public Source<json> {
     Source::set_params(params);
     _params["chip_path"] = "/dev/gpiochip0";
     _params["pulldown"] = true;
+    _params["event_mode"] = "none";
     _params.merge_patch(*(json *)params);
 
     try {
@@ -106,6 +132,7 @@ class RpioPlugin : public Source<json> {
     ostringstream ss;
     info["chip_path"] = _chip_path;
     info["pulldown"] = _params.value("pulldown", true) ? "true" : "false";
+    info["event_mode"] = _params.value("event_mode", "none");
 
     for (size_t i = 0; i < _offsets.size(); i++) {
       ss << _offsets[i];
@@ -116,10 +143,22 @@ class RpioPlugin : public Source<json> {
     return info;
   };
 
+  inline int event_mode(const string &name) {
+    auto it = event_modes.find(name);
+    if (it != event_modes.end()) {
+      return it->second;
+    }
+    return -1;
+  }
+
 private:
   // Define the fields that are used to store internal resources
   string _chip_path;
   vector<unsigned int> _offsets;
+  const map<string, int> event_modes = {
+      {"rising", gpiod::line_request::EVENT_RISING_EDGE},
+      {"falling", gpiod::line_request::EVENT_FALLING_EDGE},
+      {"both", gpiod::line_request::EVENT_BOTH_EDGES}};
   gpiod::chip _chip;
   gpiod::line_bulk _lines;
 };

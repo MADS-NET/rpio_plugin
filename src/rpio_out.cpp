@@ -19,6 +19,7 @@
 #include <pugg/Kernel.h>
 // other includes as needed here
 #include <gpiod.hpp>
+#include <set>
 
 // Define the name of the plugin
 #ifndef PLUGIN_NAME
@@ -35,6 +36,17 @@ using json = nlohmann::json;
 class RpioPlugin : public Sink<json> {
 
 public:
+  ~RpioPlugin() {
+    for (auto offset : _active_lines) {
+      try {
+        auto line = _chip.get_line(offset);
+        line.release();
+      } catch (...) {
+        // Ignore errors on cleanup
+      }
+    }
+    _chip.reset(); // Destructor, release resources if needed
+  }
 
   // Typically, no need to change this
   string kind() override { return PLUGIN_NAME; }
@@ -47,13 +59,19 @@ public:
     }
     try {
       auto pins = input["pins"];
+      unsigned int offset = 0;
+      int value;
       gpiod::line line;
       gpiod::line_request req;
       req.consumer = "rpio_out.plugin";
       req.request_type = gpiod::line_request::DIRECTION_OUTPUT;
-      int value;
       for (auto &pair : pins.items()) {
-        line = _chip.get_line(atoi(pair.key().c_str()));
+        offset = atoi(pair.key().c_str());
+        if (offset >= _chip.num_lines()) {
+          _error = "Invalid pin number";
+          return return_type::error;
+        }
+        line = _chip.get_line(offset);
         value = pair.value().get<int>();
         if (value != 0 && value != 1) {
           _error = "Pin value must be 0 or 1";
@@ -61,7 +79,7 @@ public:
         }
         line.request(req);
         line.set_value(value);
-        line.release();
+        _active_lines.insert(offset);
       }
     } catch (const std::exception &e) {
       _error = e.what();
@@ -93,6 +111,7 @@ private:
   // Define the fields that are used to store internal resources
   string _chip_path;
   gpiod::chip _chip;
+  set<unsigned int> _active_lines;
 };
 
 
