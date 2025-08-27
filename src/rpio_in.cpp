@@ -46,6 +46,28 @@ class RpioPlugin : public Source<json> {
     _lines.request(req);
   }
 
+  json read_lines() {
+    json result;
+    int value = 0;
+    unsigned int offset = 0;
+    for (auto &line : _lines) {
+        value = line.get_value();
+        offset = line.offset();
+        result[to_string(offset)] = value;
+    }
+    return result;
+  }
+
+  json read_events(const chrono::milliseconds &timeout) {
+    auto events = _lines.event_wait(timeout);
+    json result;
+    for (const auto &it : events) {
+      auto event = it.event_read();
+      result[to_string(event.source.offset())] = event.source.get_value();
+    }
+    return result;
+  }
+
 public:
   ~RpioPlugin() {
     _lines.release();
@@ -59,43 +81,18 @@ public:
   return_type get_output(json &out,
                          std::vector<unsigned char> *blob = nullptr) override {
     out.clear();
-    gpiod::line_bulk *lines_to_read = new gpiod::line_bulk();
-    switch (event_mode(_params["event_mode"])) {
-    case -1: {
-      lines_to_read = &_lines;
-    } break;
-
-    case gpiod::line_request::EVENT_RISING_EDGE:
-    case gpiod::line_request::EVENT_FALLING_EDGE:
-    case gpiod::line_request::EVENT_BOTH_EDGES: {
-      try {
-        *lines_to_read = _lines.event_wait(chrono::milliseconds(500));
-      } catch (const std::system_error &e) {
-        _error = e.what();
-        return return_type::critical;
+    if (event_mode(_params["event_mode"]) == -1) {
+      out[_chip_path] = read_lines();
+      if (out[_chip_path].empty()) {
+        _error = "No lines read";
+        return return_type::error;
       }
-      if (lines_to_read->empty()) {
+    } else {
+      out[_chip_path] = read_events(chrono::milliseconds(500));
+      if (out[_chip_path].empty()) {
         _error = "No events occurred";
         return return_type::retry;
       }
-    } break;
-    default: {
-      _error = "Event mode not supported";
-      return return_type::error;
-    } break;
-    }
-
-    int value = 0;
-    unsigned int offset = 0;
-    for (auto &line : *lines_to_read) {
-      try {
-        value = line.get_value();
-        offset = line.offset();
-        out[_chip_path][to_string(offset)] = value;
-      } catch (const std::exception &e) {
-        _error = e.what();
-        return return_type::error;
-      } 
     }
 
     // This sets the agent_id field in the output json object, only when it is
