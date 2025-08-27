@@ -51,9 +51,9 @@ class RpioPlugin : public Source<json> {
     int value = 0;
     unsigned int offset = 0;
     for (auto &line : _lines) {
-        value = line.get_value();
-        offset = line.offset();
-        result[to_string(offset)] = value;
+      value = line.get_value();
+      offset = line.offset();
+      result[to_string(offset)] = value;
     }
     return result;
   }
@@ -81,18 +81,26 @@ public:
   return_type get_output(json &out,
                          std::vector<unsigned char> *blob = nullptr) override {
     out.clear();
-    if (event_mode(_params["event_mode"]) == -1) {
-      out[_chip_path] = read_lines();
-      if (out[_chip_path].empty()) {
-        _error = "No lines read";
-        return return_type::error;
+    try {
+      if (event_mode(_params["event_mode"]) == -1) {
+        out[_chip_path] = read_lines();
+        if (out[_chip_path].empty()) {
+          _error = "No lines read";
+          return return_type::error;
+        }
+      } else {
+        out[_chip_path] =
+            read_events(chrono::milliseconds(_params["polling_timeout"]));
+        if (out[_chip_path].empty()) {
+          _error = "No events occurred";
+          return return_type::retry;
+        }
       }
-    } else {
-      out[_chip_path] = read_events(chrono::milliseconds(500));
-      if (out[_chip_path].empty()) {
-        _error = "No events occurred";
-        return return_type::retry;
-      }
+    } catch (const std::system_error &e) {
+      _error = e.what();
+      return return_type::critical;
+    } catch (...) {
+      return return_type::error;
     }
 
     // This sets the agent_id field in the output json object, only when it is
@@ -107,6 +115,7 @@ public:
     _params["chip_path"] = "/dev/gpiochip0";
     _params["pulldown"] = true;
     _params["event_mode"] = "none";
+    _params["polling_timeout"] = 500;
     _params.merge_patch(*(json *)params);
 
     try {
@@ -130,6 +139,9 @@ public:
     info["chip_path"] = _chip_path;
     info["pulldown"] = _params.value("pulldown", true) ? "true" : "false";
     info["event_mode"] = _params.value("event_mode", "none");
+    if (_params["event_mode"] != -1) {
+      info["polling_timeout"] = to_string(_params["polling_timeout"]);
+    }
 
     for (size_t i = 0; i < _offsets.size(); i++) {
       ss << _offsets[i];

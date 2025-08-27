@@ -1,8 +1,12 @@
 # rpio plugin for MADS
 
-This is a pair of plugins provinding interfaces to Raspberry Pi GPIO pins using the libgpiod2 library. The plugin `rpio_out` allows setting GPIO pin values, while `rpio_in` allows reading GPIO pin values.
+This is a pair of plugins provinding interfaces to Raspberry Pi GPIO pins using the libgpiod library. The plugin `rpio_out` allows setting GPIO pin values, while `rpio_in` allows reading GPIO pin values.
 
-*Required MADS version: 1.3.3.*
+*Required MADS version: 1.3.x.*
+
+## Dependencies
+
+- libgpiod, version 1.6.x, install with `sudo apt install libgpiod-dev`
 
 
 ## Supported platforms
@@ -17,7 +21,6 @@ Currently, the supported platforms are:
 Linux:
 
 ```bash
-sudo apt install libgpiod-dev libgpiod2
 cmake -Bbuild -DCMAKE_INSTALL_PREFIX="$(mads -p)"
 cmake --build build -j4
 sudo cmake --install build
@@ -32,8 +35,9 @@ The plugin supports the following settings in the INI file:
 chip_path = "/dev/gpiochip0"
 offsets = [5, 15, 10, 12]
 pulldown = true
-event_mode = "none"  ; options: none, rising, falling, both
-period = 500
+event_mode = "none"   # options: none, rising, falling, both
+period = 500          # in milliseconds
+polling_timeout = 500 # in milliseconds
 
 [rpio_out]
 chip_path = "/dev/gpiochip0"
