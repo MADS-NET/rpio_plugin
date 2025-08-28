@@ -69,20 +69,24 @@ public:
         offset = atoi(pair.key().c_str());
         if (offset >= _chip.num_lines()) {
           _error = "Invalid pin number";
+          cerr << _error << endl;
           return return_type::error;
         }
         line = _chip.get_line(offset);
         value = pair.value().get<int>();
         if (value != 0 && value != 1) {
           _error = "Pin value must be 0 or 1";
+          cerr << _error << endl;
           return return_type::error;
         }
         line.request(req);
         line.set_value(value);
         _active_lines.insert(offset);
+        line.release();
       }
     } catch (const std::exception &e) {
       _error = e.what();
+      cerr << _error << endl;
       return return_type::error;
     }
     return return_type::success;
