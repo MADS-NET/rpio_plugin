@@ -49,22 +49,25 @@ class RpioPlugin : public Source<json> {
   json read_lines() {
     json result;
     int value = 0;
+    setup_lines();
     unsigned int offset = 0;
-    for (auto &line : _lines) {
-      value = line.get_value();
-      offset = line.offset();
-      result[to_string(offset)] = value;
+    auto vals = _lines.get_values();
+    for (size_t i = 0; i < _lines.size(); i++) {
+      result[to_string(_lines[i].offset())] = vals[i];
     }
+    _lines.release();
     return result;
   }
 
   json read_events(const chrono::milliseconds &timeout) {
+    setup_lines();
     auto events = _lines.event_wait(timeout);
     json result;
     for (const auto &it : events) {
       auto event = it.event_read();
       result[to_string(event.source.offset())] = event.source.get_value();
     }
+    _lines.release();
     return result;
   }
 
