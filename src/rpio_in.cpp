@@ -60,9 +60,9 @@ class RpioPlugin : public Source<json> {
   }
 
   json read_events(const chrono::milliseconds &timeout) {
+    json result;
     setup_lines();
     auto events = _lines.event_wait(timeout);
-    json result;
     for (const auto &it : events) {
       auto event = it.event_read();
       result[to_string(event.source.offset())] = event.source.get_value();
@@ -73,7 +73,7 @@ class RpioPlugin : public Source<json> {
 
 public:
   ~RpioPlugin() {
-    _lines.release();
+    if (_lines.size()) _lines.release();
     _chip.reset(); // Destructor, release resources if needed
   }
 
@@ -131,8 +131,6 @@ public:
     } catch (nlohmann::json::exception &e) {
       _offsets = {};
     }
-
-    setup_lines();
   }
 
   // Implement this method if you want to provide additional information
